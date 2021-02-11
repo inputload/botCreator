@@ -30,30 +30,65 @@ class Bot:
         def start(message):
             for event in self.events['start']:
                 if event.type == 'send_message':
-                    event.do(self=self.bot, chat_id=message.chat.id, text=event.data['text'])
+                    event.do(self=self.bot, chat_id=message.chat.id, text=event.data)
 
-        def triger(command, events):
+        def command_triger(command, events):
             @self.bot.message_handler(commands=[command])
             def do(message):
                 for event in events:
+                    keys = False
+                    if event.keys:
+                        keys = event.keys.data
                     if event.type == 'send_message':
-                        event.do(self=self.bot, chat_id=message.chat.id, text=event.data['text'])
+                        event.do(self=self.bot, chat_id=message.chat.id, text=event.data, reply_markup=keys)
+
+        def text_triger(triger, events):
+            @self.bot.message_handler(content_types=["text"], func=lambda message: message.text == triger)
+            def do(message):
+                for event in events:
+                    keys = False
+                    if event.keys:
+                        keys = event.keys.data
+                    if event.type == 'send_message':
+                        event.do(self=self.bot, chat_id=message.chat.id, text=event.data, reply_markup=keys)
 
         events = self.events.copy()
         events.pop('start')
 
         for event in events:
-            Thread(target=triger, args=(event.data['command'], events[event])).start()
+            if event.type == 'command_triger':
+                Thread(target=command_triger, args=(event.data, events[event])).start()
+            elif event.type == 'text_triger':
+                Thread(target=text_triger, args=(event.data, events[event])).start()
 
 
 class CommandTriger:
     def __init__(self, command):
-        self.data = {'command': command}
+        self.data = command
         self.type = 'command_triger'
 
 
+class TextTriger:
+    def __init__(self, triger):
+        self.data = triger
+        self.type = 'text_triger'
+
+
 class TextMessage:
-    def __init__(self, text, keyboard):
+    def __init__(self, text, keyboard=''):
         self.do = telebot.TeleBot.send_message
-        self.data = {'text': text}
+        self.data = text
+        self.keys = keyboard
         self.type = 'send_message'
+
+
+class Keyboard:
+    def __init__(self, buttons):
+        self.type = 'keyboard'
+        if buttons:
+            data = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+            for button in buttons:
+                data.add(button)
+        else:
+            data = telebot.types.ReplyKeyboardRemove()
+        self.data = data
